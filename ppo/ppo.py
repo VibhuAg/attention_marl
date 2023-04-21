@@ -40,6 +40,17 @@ class DefaultPolicy:
             
     def act(self, observation, communication):
         ### Randomized Ablation
+        """
+            Want to concatenate observation with each communication
+            Run Multihead Attention on this matrix
+            Get back attention weights, either 
+
+            Currently expects a matrix of concatenated communication vectors
+            Perhaps multiply by attention weights to get new matrix
+            *Perhaps just add together the attention output and the old matrix
+            What is act_bias?
+        """
+
         if self.ablate_kwargs is not None:
             k,n = self.ablate_kwargs['k'], self.ablate_kwargs['n']
             comm = communication.reshape(n-1, -1)
