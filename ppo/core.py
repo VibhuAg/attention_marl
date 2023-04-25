@@ -238,14 +238,55 @@ class MLPCritic(nn.Module):
                 v   = v.reshape(-1, self.hidden_size)
             return torch.squeeze(self.v(v), -1)
     
-    
+class MultiheadAttention(nn.Module):
+    def __init__(self, input_dim, embed_dim, num_heads):
+        super().__init__()
+        assert embed_dim % num_heads == 0, "Embedding dimension must be 0 modulo number of heads."
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        # Stack all weight matrices 1...h together for efficiency
+        # Note that in many implementations you see "bias=False" which is optional
+        self.qkv_proj = nn.Linear(input_dim, 3*embed_dim)
+        self.attn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
+        self.o_proj = nn.Linear(embed_dim, input_dim)
+
+        # self._reset_parameters()
+
+    def _reset_parameters(self):
+        # Original Transformer initialization, see PyTorch documentation
+        nn.init.xavier_uniform_(self.qkv_proj.weight)
+        self.qkv_proj.bias.data.fill_(0)
+        nn.init.xavier_uniform_(self.o_proj.weight)
+        self.o_proj.bias.data.fill_(0)
+
+    def forward(self, x, mask=None):
+        # batch_size, seq_length, _ = x.size()
+        qkv = self.qkv_proj(x)
+
+        # Separate Q, K, V from linear output
+        # qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3*self.head_dim)
+        # qkv = qkv.permute(0, 2, 1, 3) # [Batch, Head, SeqLen, Dims]
+        q, k, v = qkv.chunk(3, dim=-1)
+        values, _ = self.attn(q, k, v)
+        # Determine value outputs
+        # values, attention = scaled_dot_product(q, k, v, mask=mask)
+        # values = values.permute(0, 2, 1, 3) # [Batch, SeqLen, Head, Dims]
+        # values = values.reshape(batch_size, seq_length, self.embed_dim)
+        o = self.o_proj(values)
+
+        return o
+        
 class MLPActorCritic(nn.Module):
 
-    def __init__(self, obs_dim, action_space, hidden_sizes=(64,64), activation=nn.Tanh, beta=False, recurrent=False, ep_len=1000):
+    def __init__(self, obs_dim, action_space, hidden_sizes=(64,64), activation=nn.Tanh, beta=False, recurrent=False, ep_len=1000, n_pursuers=9):
         super().__init__()
         
         self.beta = beta ### Whether to use beta distribution to deal with clipped action space
         self.recurrent = recurrent
+        self.attn = nn.MultiheadAttention(embed_dim=obs_dim, num_heads=1) # MultiheadAttention(obs_dim, n_pursuers*obs_dim, n_pursuers)# 
         # policy builder depends on action space
         if isinstance(action_space, Box) and not beta:
             self.pi = MLPGaussianActor(obs_dim, action_space.shape[0], hidden_sizes, 
@@ -277,7 +318,11 @@ class MLPActorCritic(nn.Module):
                 self.MovingMeanStd.push(obs)
                 self.moving_mean = self.MovingMeanStd.mean()
                 self.moving_std  = self.MovingMeanStd.std()
-            obs = (obs - self.moving_mean)/(self.moving_std+1e-6)
+            # obs = (obs - self.moving_mean)/(self.moving_std+1e-6)
+            o_tensor = obs.unsqueeze(0)
+            attn_outputs, _ = self.attn(o_tensor, o_tensor, o_tensor)
+            # print(attn_outputs)
+            obs = self.normalize(o_tensor + attn_outputs)
             pi = self.pi._distribution(obs)
             a = pi.sample()
             logp_a = self.pi._log_prob_from_distribution(pi, a)
