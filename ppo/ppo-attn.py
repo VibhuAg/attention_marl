@@ -5,7 +5,7 @@ from torch.optim import Adam
 from torch.nn import GRU, Linear, MultiheadAttention
 import torch
 import matplotlib
-from torch.optim import Adam
+from torch.optim.lr_scheduler import ExponentialLR
 import gym
 import time
 from copy import deepcopy
@@ -279,7 +279,7 @@ def make_food_env(comm, **kwargs):
     return env, good_agents, adv_agents
 
 def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0, 
-        steps_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
+        steps_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=0.999,#3e-4,
         vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
         target_kl=0.01, save_freq=10, name_env="HalfCheetah-v3", epoch_smoothed=10,
         no_save=False, verbose=False, log_freq=50, exp_name='ppo', trained_dir=None, 
@@ -386,15 +386,16 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         return ((ac.v(obs) - ret)**2).mean()
         
     # Set up optimizers for policy and value function
+
     pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
     vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr)
-    # attn_optimizer = Adam(ac.attn.parameters(), lr=pi_lr)
+    scheduler = ExponentialLR(pi_optimizer, gamma=0.5)
 
     def update(data):
         pi_l_old, pi_info_old, act_info = compute_loss_pi(data)
         pi_l_old = pi_l_old.item()
         v_l_old = compute_loss_v(data).item()
-
+        loss_pi = None
         # Train policy with multiple steps of gradient descent
         for i in range(train_pi_iters):
             pi_optimizer.zero_grad()
@@ -405,18 +406,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             if kl > 1.5 * target_kl and not verbose:
                 print('Early stopping at step %d due to reaching max kl.'%i)
                 break
-            # grad_pi = torch.autograd.grad(loss_pi, output1, retain_graph=True)[0]
-            # grad_pi = torch.autograd.grad(loss_pi, pi_outputs, retain_graph=True, allow_unused=True)
-            
-            """
-                
-            """
-            # o_tensor = data['obs'].unsqueeze(0)
-            # attn_outputs, _ = ac.attn(o_tensor, o_tensor, o_tensor)
-            # attn_outputs.backward(grad_pi)
-            # if i != train_pi_iters - 1:
-            #     loss_pi.backward(retain_graph=True)
-            # else:
+
             loss_pi.backward()
             # if any(param.grad is not None for param in ac.pi.parameters()):
             #     print("Backpropagation is being performed: pi")
@@ -428,9 +418,9 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             # else:
             #     print("Backpropagation is not being performed")
             pi_optimizer.step()
-            # attn_optimizer.step()
+            
         stop_iter = i
-        
+        scheduler.step()
         # Value function learning
         for i in range(train_v_iters):
             vf_optimizer.zero_grad()
