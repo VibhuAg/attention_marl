@@ -5,7 +5,7 @@ from torch.optim import Adam
 from torch.nn import GRU, Linear, MultiheadAttention
 import torch
 import matplotlib
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import ExponentialLR, ReduceLROnPlateau
 import gym
 import time
 from copy import deepcopy
@@ -279,7 +279,7 @@ def make_food_env(comm, **kwargs):
     return env, good_agents, adv_agents
 
 def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0, 
-        steps_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=0.999,#3e-4,
+        steps_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
         target_kl=0.01, save_freq=10, name_env="HalfCheetah-v3", epoch_smoothed=10,
         no_save=False, verbose=False, log_freq=50, exp_name='ppo', trained_dir=None, 
@@ -295,6 +295,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     np.random.seed(seed)
 
     # Instantiate environment
+    pi_lr = 6e-4 # new addition
     env, good_agent_name, adv_agent_name = env_fn()
     print("good agent:{}".format(good_agent_name))
     print("adv_agent_name:{}".format(adv_agent_name))
@@ -389,7 +390,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
     vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr)
-    scheduler = ExponentialLR(pi_optimizer, gamma=0.5)
+    scheduler = ReduceLROnPlateau(pi_optimizer, 'min')
 
     def update(data):
         pi_l_old, pi_info_old, act_info = compute_loss_pi(data)
@@ -420,7 +421,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             pi_optimizer.step()
             
         stop_iter = i
-        scheduler.step()
+        scheduler.step(loss_pi)
         # Value function learning
         for i in range(train_v_iters):
             vf_optimizer.zero_grad()
