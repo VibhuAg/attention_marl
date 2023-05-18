@@ -69,6 +69,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     for j in range(len(sizes)-1):
         act = activation if j < len(sizes)-2 else output_activation
         layers += [nn.Linear(sizes[j], sizes[j+1]), act()]
+    
     return nn.Sequential(*layers)
 
 class Actor(nn.Module):
@@ -281,12 +282,13 @@ class MultiheadAttention(nn.Module):
         
 class MLPActorCritic(nn.Module):
 
-    def __init__(self, obs_dim, action_space, hidden_sizes=(64,64), activation=nn.Tanh, beta=False, recurrent=False, ep_len=1000, n_pursuers=9):
+    def __init__(self, obs_dim, action_space, hidden_sizes=(64,64), activation=nn.Tanh, beta=False, recurrent=False, use_attention=False, ep_len=1000, n_pursuers=9):
         super().__init__()
         
         self.beta = beta ### Whether to use beta distribution to deal with clipped action space
         self.recurrent = recurrent
-        self.attn = nn.MultiheadAttention(embed_dim=obs_dim, num_heads=1) # MultiheadAttention(obs_dim, n_pursuers*obs_dim, n_pursuers)# 
+        self.attn = nn.MultiheadAttention(embed_dim=obs_dim, num_heads=1) # MultiheadAttention(obs_dim, n_pursuers*obs_dim, n_pursuers)#
+        self.use_attention = use_attention
         # policy builder depends on action space
         if isinstance(action_space, Box) and not beta:
             self.pi = MLPGaussianActor(obs_dim, action_space.shape[0], hidden_sizes, 
@@ -319,10 +321,13 @@ class MLPActorCritic(nn.Module):
                 self.moving_mean = self.MovingMeanStd.mean()
                 self.moving_std  = self.MovingMeanStd.std()
             # obs = (obs - self.moving_mean)/(self.moving_std+1e-6)
-            o_tensor = obs.unsqueeze(0)
-            attn_outputs, _ = self.attn(o_tensor, o_tensor, o_tensor)
-            # print(attn_outputs)
-            obs = self.normalize(o_tensor + attn_outputs)
+            if self.use_attention:
+                o_tensor = obs.unsqueeze(0)
+                attn_outputs, _ = self.attn(o_tensor, o_tensor, o_tensor)
+                obs = self.normalize(o_tensor + attn_outputs)
+            else:
+                obs = (obs - self.moving_mean)/(self.moving_std+1e-6)
+
             pi = self.pi._distribution(obs)
             a = pi.sample()
             logp_a = self.pi._log_prob_from_distribution(pi, a)
