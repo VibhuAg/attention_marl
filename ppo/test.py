@@ -206,18 +206,19 @@ def main(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), trained_dir
     ac = actor_critic(obs_dim[0], action_space, **ac_kwargs).to(Param.device)
     if trained_dir is not None:
         state_dict, mean, std = torch.load(trained_dir, map_location=Param.device)
-        ac.load_state_dict(state_dict)
+        ac.load_state_dict(state_dict, strict=False)
         ac.moving_mean = mean
         ac.moving_std = std
     
     if random_attacker:
         ac = RandomAttacker(action_space)
     
-    mean, _ = test_return(env, ac, epochs, max_ep_len, good_agent_name, 
+    mean, std = test_return(env, ac, epochs, max_ep_len, good_agent_name, 
                             dist_action, comm, recurrent, ablate_kwargs,
                             random_ac = test_random)
-    print('-----[Number of Agents:{} Number of Adversary:{} Ablation Size:{} Median Sample Size {}] {} Epochs Performance:{}------'.\
-          format(num_agent, num_adv, ablate_kwargs['k'], ablate_kwargs['median'], epochs, mean))
+    
+    print('-----[Number of Agents:{} Number of Adversary:{}] {} Epochs Performance:{} Epoch Std dev: {}------'.\
+          format(num_agent, num_adv, epochs, mean, std))
    
 
 if __name__ == '__main__':
