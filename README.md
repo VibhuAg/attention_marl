@@ -42,6 +42,15 @@ Note that increasing ablation size k will increase the clean performance, while 
 
 The log and reward files can be found under ./data/. Trained model is saved in ./learned_models/ as ppo_FoodCollector_${NAME_OF_THE_MODEL}
 
+- Train a policy using attention of 9 agents in a benign setting with communication:
+```
+python ppo-attn.py --epochs 800 --exp-name NAME_OF_THE_MODEL --obs-normalize --comm --smart --cuda CUDA --n-pursuers 9 --dist-action
+# --ablate-k is the ablation size hyperparameter (i.e., $k$ in the paper)
+# --n-pursuers is the number of agents in this game (i.e., $N$ in the paper)
+# To train a vanilla agent without AME certification, set --ablate-k as N-1=8.
+# If gpu is not available, please specify --no-cuda
+# To train a policy without communication signal, remove --comm and --smart
+```
 
 - Evaluate the message-ensemble policy under no attack (clean environment):
 ```
@@ -50,7 +59,7 @@ python test.py --epochs 200 --trained-dir ./learned_models/ppo_FoodCollector_${N
 # For a vanilla agent in this scenario, set --ablate-k 8 --ablate-median 1
 ```
 
-- Evaluate the message-ensemble policy under random attack (heuristic attack):
+- Evaluate the trained policy under random attack (heuristic attack):
 ```
 python test.py --epochs 200 --trained-dir ./learned_models/ppo_FoodCollector_${NAME_OF_THE_MODEL} --obs-normalize --comm --smart --cuda CUDA --n-pursuers 9 --ablate --ablate-k 2 --ablate-median 28 --victim-dist-action --test-random-attacker
 ```
@@ -63,9 +72,16 @@ python ppo.py --epochs 800 --exp-name NAME_OF_ATTACKER_MODEL --obs-normalize --c
 # The directory after --good-policy is where the pre-trained victim model gets stored
 ```
 
+- Evaluate the attention policy of 9 agents under a learned attacker (strong adaptive attack):
+
+```
+python ppo-attn.py --epochs 800 --exp-name NAME_OF_ATTACKER_MODEL --obs-normalize --comm --smart --cuda CUDA --victim pursuer_0 --convert-adv pursuer_1 --pursuer_2 --good-policy ./learned_models/ppo_FoodCollector_${NAME_OF_VICTIM_MODEL}$ --n-pursuers 9 --ablate --ablate-k 2 --ablate-median 28 --victim-dist-action
+# train an attacker against the fixed victim policy
+# The directory after --good-policy is where the pre-trained victim model gets stored
+```
 
 
-### For Continuous Action Space
+### For Continuous Action Space (no attention)
 
 
 - Train the message-ablation policy of 9 agents in a benign setting with communication:
