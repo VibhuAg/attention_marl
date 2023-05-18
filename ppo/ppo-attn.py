@@ -26,7 +26,7 @@ class DefaultPolicy:
         # self.attn = nn.
         self.dist_action   = dist_action
         self.ablate_kwargs = ablate_kwargs
-        self.idx_list      = np.array(makeCombi(ablate_kwargs['n']-1, ablate_kwargs['k']))
+        #self.idx_list      = np.array(makeCombi(ablate_kwargs['n']-1, ablate_kwargs['k']))
         if confidence_kwargs is None:
             self.detector_ac = None
             self.act_bias = None
@@ -295,7 +295,6 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     np.random.seed(seed)
 
     # Instantiate environment
-    pi_lr = 6e-4 # new addition
     env, good_agent_name, adv_agent_name = env_fn()
     print("good agent:{}".format(good_agent_name))
     print("adv_agent_name:{}".format(adv_agent_name))
@@ -320,7 +319,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     print("Obs dim:{}, Act dim:{}".format(obs_dim[0], act_dim))
     
     # Create actor-critic module
-    ac = actor_critic(obs_dim[0], action_space, **ac_kwargs).to(Param.device)
+    ac = actor_critic(obs_dim[0], action_space, use_attention=True, **ac_kwargs).to(Param.device)
 
     # attn = MultiheadAttention(obs_dim[0], 1).to(Param.device) # effectively does just scaled dot-product attention with one head
     if trained_dir is not None:
@@ -388,11 +387,10 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         
     # Set up optimizers for policy and value function
 
-    pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
-    vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr)
-    scheduler = ReduceLROnPlateau(pi_optimizer, 'min')
+    pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr, eps=1e-7)
+    vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr, eps=1e-7)
 
-    def update(data):
+    def update(epoch, data):
         pi_l_old, pi_info_old, act_info = compute_loss_pi(data)
         pi_l_old = pi_l_old.item()
         v_l_old = compute_loss_v(data).item()
@@ -418,10 +416,13 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             #     print("Backpropagation is being performed")
             # else:
             #     print("Backpropagation is not being performed")
+            # Annealed LR
+            # frac = 1.0 - (epoch - 1.0) / args.epochs
+            # lrnow = frac * args.pi_lr
+            # pi_optimizer.param_groups[0]["lr"] = lrnow
             pi_optimizer.step()
             
         stop_iter = i
-        scheduler.step(loss_pi)
         # Value function learning
         for i in range(train_v_iters):
             vf_optimizer.zero_grad()
@@ -552,7 +553,7 @@ def ppo(env_fn=None, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         
         data = dict(obs=obs_buf, act=act_buf, ret=ret_buf,
                     adv=adv_buf, logp=logp_buf)
-        param_dict = update(data)
+        param_dict = update(epoch, data)
         epoch_return.append(sum(avg_return)/len(avg_return))
             
         if not(verbose):

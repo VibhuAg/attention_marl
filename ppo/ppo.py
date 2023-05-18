@@ -49,6 +49,9 @@ class DefaultPolicy:
             Perhaps multiply by attention weights to get new matrix
             *Perhaps just add together the attention output and the old matrix
             What is act_bias?
+            [X]It's possible that training is done for us by the optimizers?
+            Pass ppo the attention module, create a new optimizer that is trained using the policy loss?
+            Have to put the attention module in the test file as well
         """
 
         if self.ablate_kwargs is not None:
