@@ -1,10 +1,9 @@
-# Certifiably Robust Policy Learning against Adversarial Multi-Agent Communication
-
+# Attention in Adversarial Multi-Agent Communication
 
 
 ## 1. Introduction
 
-This is a python implementation for our AME method and baselines. The environment implementation is modified from the [PettingZoo](https://pettingzoo.farama.org/)[1] MARL codebase (in folder *PettingZoo*). The PPO trainer is modified from the [SpinningUp](https://spinningup.openai.com/en/latest/) codebase by OpenAI (in folder *ppo*).
+This is a python implementation for attention in a multi-agent environment as well as AME policy proposed in Sun, Y., et. al. 2023. The environment implementation is modified from the [PettingZoo](https://pettingzoo.farama.org/)[1] MARL codebase (in folder *PettingZoo*). The PPO trainer is modified from the [SpinningUp](https://spinningup.openai.com/en/latest/) codebase by OpenAI (in folder *ppo*).
 
 We suggest creating a new virtual environment (conda is suggested with python version 3.7), and run the following command to install the required packages 
 
